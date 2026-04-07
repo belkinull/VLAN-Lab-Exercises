@@ -488,9 +488,9 @@ Exam Trick Question 2:
 On R1, a student runs show ip route and sees all three connected subnets (192.168.10.0, 192.168.20.0, 192.168.30.0) as directly connected. But every inter-VLAN ping fails. The switch trunk shows all VLANs active. What single command is most likely missing?\
 Answer: The physical interface no shutdown. Even though the routing table shows connected routes for sub-interfaces (the routes are built when the sub-interfaces are configured, regardless of physical state on some IOS versions), if GigabitEthernet0/0 is administratively down, no frames actually pass through it. The routing table can be misleading here, it shows the routes as connected even when the interface is shutdown in some Packet Tracer versions. Always verify with show ip interface brief and look for up/up on the physical interface, not just the sub-interfaces.\
 
-## LAB 2 — Inter-VLAN Routing via Layer 3 Switch (SVI)
+## LAB 2 - Inter-VLAN Routing via Layer 3 Switch (SVI)
 ### 1. Scenario Description
-Company: BetaTech Solutions — a larger company with 80+ employees across two floors. The IT team has upgraded the network infrastructure with a Layer 3 core switch. The goal is to eliminate the external router as the single point of failure for inter-VLAN routing and move that function inside the switch fabric itself using SVIs. A dedicated management VLAN keeps switch management traffic completely separate from user traffic.\
+Company: BetaTech Solutions - a larger company with 80+ employees across two floors. The IT team has upgraded the network infrastructure with a Layer 3 core switch. The goal is to eliminate the external router as the single point of failure for inter-VLAN routing and move that function inside the switch fabric itself using SVIs. A dedicated management VLAN keeps switch management traffic completely separate from user traffic.\
 Note: This lab uses the `10.10.x.x` addressing scheme deliberately different from Lab 1, so you practice reading and not confusing subnet assignments.
 | VLAN ID | Name |Purpose | Subnet | Gateway | Notes |
 | ------- | ---- | ------ | ------ | ------- | ------------ |
@@ -499,6 +499,671 @@ Note: This lab uses the `10.10.x.x` addressing scheme deliberately different fro
 | 30 | Sales | Sales team PCs | 10.10.30.0/24 | 10.10.30.1 | SVI on CORE-SW |
 | 99 | Management | Switch management | 10.10.99.0/24 | 10.10.99.1 | Out-of-band mgmt |
 | 999 | NATIVE | Unused native VLAN | - | - | Security |
+### 2. Network Topology
+Devices:
+* CORE-SW: Cisco Catalyst 3560 - Layer 3 switch, routing engine enabled, SVIs for all VLANs, WAN uplink to ISP
+* SW-A: Cisco 2960 - Layer 2 access switch, Floor 1, carries VLAN 10 (HR) and VLAN 20 (IT)
+* SW-B: Cisco 2960 - Layer 2 access switch, Floor 2, carries VLAN 30 (Sales) only
+* 7 PCs across three departments
 
+Interface connections:
 
+| From Device | Interface | To Device | Interface | Link Type |
+|------------|----------|----------|----------|-----------|
+| CORE-SW | Gi0/1 | ISP Router | - | WAN / Routed |
+| CORE-SW | Gi0/2 | SW-A | Gi0/1 | Trunk (VLANs 10,20,99) |
+| CORE-SW | Gi0/3 | SW-B | Gi0/1 | Trunk (VLANs 30,99) |
+| SW-A | Fa0/1 | PC-HR1 | NIC | Access VLAN 10 |
+| SW-A | Fa0/2 | PC-HR2 | NIC | Access VLAN 10 |
+| SW-A | Fa0/5 | PC-IT1 | NIC | Access VLAN 20 |
+| SW-A | Fa0/6 | PC-IT2 | NIC | Access VLAN 20 |
+| SW-B | Fa0/1 | PC-Sales1 | NIC | Access VLAN 30 |
+| SW-B | Fa0/2 | PC-Sales2 | NIC | Access VLAN 30 |
+| SW-B | Fa0/3 | PC-Sales3 | NIC | Access VLAN 30 |
+### 3. Objectives
+1. CORE-SW performs all inter-VLAN routing internally using SVIs - no external router is needed for local traffic
+2. Each VLAN has a corresponding SVI on CORE-SW that acts as the default gateway
+3. ip routing is enabled on CORE-SW so the switch can route between VLANs
+4. SW-A and SW-B are pure Layer 2 - no routing, no SVIs except for management
+5. Trunk links carry only the VLANs they need - no unnecessary VLAN flooding
+6. All switches are manageable via VLAN 99 with unique management IPs
+7. All PCs across all VLANs can communicate with each other through CORE-SW
+8. All unused ports on all switches are disabled and in VLAN 999
+### 4. Tasks
+Task 1 - On CORE-SW, enable ip routing to activate the Layer 3 routing engine
 
+Task 2 - Create VLANs 10, 20, 30, 99, 999 on ALL three switches (CORE-SW, SW-A, SW-B)
+
+Task 3 - On CORE-SW, create SVIs for VLAN 10, 20, 30, and 99 with correct IP addresses
+
+Task 4 - On CORE-SW, configure Gi0/2 as a trunk to SW-A (allow VLANs 10, 20, 99)
+
+Task 5 - On CORE-SW, configure Gi0/3 as a trunk to SW-B (allow VLANs 30, 99)
+
+Task 6 - On SW-A, configure access ports Fa0/1–Fa0/2 for VLAN 10 and Fa0/5–Fa0/6 for VLAN 20
+
+Task 7 - On SW-A, configure Gi0/1 as a trunk to CORE-SW (allow VLANs 10, 20, 99)
+
+Task 8 - On SW-B, configure access ports Fa0/1–Fa0/3 for VLAN 30
+
+Task 9 - On SW-B, configure Gi0/1 as a trunk to CORE-SW (allow VLANs 30, 99)
+
+Task 10 - Configure management SVIs on SW-A and SW-B in VLAN 99, with default gateways
+
+Task 11 - Disable all unused ports on all three switches, assign to VLAN 999
+
+Task 12 - Configure PC IP addresses, masks, and gateways
+
+Task 13 - Verify full inter-VLAN connectivity and management reachability
+
+### 5. Full Detailed Solution
+CORE-SW - Complete Configuration
+```
+!============================================================
+! CORE-SW - BetaTech Solutions Layer 3 Core Switch
+! Model: Cisco Catalyst 3560
+! Role: Inter-VLAN routing via SVIs, trunk hub for access switches
+!============================================================
+
+CORE-SW> enable
+CORE-SW# configure terminal
+
+!--- Device identification
+CORE-SW(config)# hostname CORE-SW
+CORE-SW(config)# no ip domain-lookup
+
+!============================================================
+! STEP 1: ENABLE LAYER 3 ROUTING
+! THIS IS THE SINGLE MOST IMPORTANT COMMAND IN THIS LAB
+! Without it, the switch operates as a pure L2 device
+! SVIs will have IPs but traffic will NOT be routed between VLANs
+! You will see all SVIs up but zero inter-VLAN pings succeed
+!============================================================
+
+CORE-SW(config)# ip routing
+
+!============================================================
+! STEP 2: CREATE ALL VLANs IN THE DATABASE
+! Must be done before any port assignments or SVI creation
+!============================================================
+
+CORE-SW(config)# vlan 10
+CORE-SW(config-vlan)# name HR
+CORE-SW(config-vlan)# exit
+
+CORE-SW(config)# vlan 20
+CORE-SW(config-vlan)# name IT
+CORE-SW(config-vlan)# exit
+
+CORE-SW(config)# vlan 30
+CORE-SW(config-vlan)# name Sales
+CORE-SW(config-vlan)# exit
+
+CORE-SW(config)# vlan 99
+CORE-SW(config-vlan)# name Management
+CORE-SW(config-vlan)# exit
+
+CORE-SW(config)# vlan 999
+CORE-SW(config-vlan)# name NATIVE_UNUSED
+CORE-SW(config-vlan)# exit
+
+!============================================================
+! STEP 3: CREATE SVIs (Switched Virtual Interfaces)
+! Each SVI is the Layer 3 gateway for its VLAN
+! When a PC sends a packet to another VLAN, it goes to its SVI
+! The routing engine on CORE-SW then forwards it to the destination SVI
+!============================================================
+
+!--- SVI for VLAN 10 (HR) - becomes default gateway for all HR PCs
+CORE-SW(config)# interface vlan 10
+CORE-SW(config-if)# description SVI-VLAN10-HR-GATEWAY
+!--- This IP address is what PC-HR1 and PC-HR2 will use as their gateway
+CORE-SW(config-if)# ip address 10.10.10.1 255.255.255.0
+!--- SVIs are UP only if at least one port in that VLAN is active
+!--- We still explicitly configure 'no shutdown' for clarity
+CORE-SW(config-if)# no shutdown
+CORE-SW(config-if)# exit
+
+!--- SVI for VLAN 20 (IT)
+CORE-SW(config)# interface vlan 20
+CORE-SW(config-if)# description SVI-VLAN20-IT-GATEWAY
+CORE-SW(config-if)# ip address 10.10.20.1 255.255.255.0
+CORE-SW(config-if)# no shutdown
+CORE-SW(config-if)# exit
+
+!--- SVI for VLAN 30 (Sales)
+CORE-SW(config)# interface vlan 30
+CORE-SW(config-if)# description SVI-VLAN30-SALES-GATEWAY
+CORE-SW(config-if)# ip address 10.10.30.1 255.255.255.0
+CORE-SW(config-if)# no shutdown
+CORE-SW(config-if)# exit
+
+!--- SVI for VLAN 99 (Management)
+!--- This SVI is the management gateway for the switches themselves
+!--- Also allows CORE-SW to be managed via VLAN 99
+CORE-SW(config)# interface vlan 99
+CORE-SW(config-if)# description SVI-VLAN99-MANAGEMENT
+CORE-SW(config-if)# ip address 10.10.99.1 255.255.255.0
+CORE-SW(config-if)# no shutdown
+CORE-SW(config-if)# exit
+
+!============================================================
+! STEP 4: CONFIGURE TRUNK PORT TO SW-A (Gi0/2)
+! This trunk carries VLAN 10 (HR) and VLAN 20 (IT) and VLAN 99 (Mgmt)
+! SW-B doesn't need VLAN 10 or 20 - so we don't allow them there
+!============================================================
+
+CORE-SW(config)# interface GigabitEthernet0/2
+CORE-SW(config-if)# description TRUNK-TO-SW-A
+!--- On a 3560, this command IS required (unlike 2960 which is dot1q-only)
+CORE-SW(config-if)# switchport trunk encapsulation dot1q
+!--- Force trunk - never rely on auto-negotiation for uplinks
+CORE-SW(config-if)# switchport mode trunk
+!--- Allow only the VLANs Floor 1 needs - deny everything else
+CORE-SW(config-if)# switchport trunk allowed vlan 10,20,99
+!--- Native VLAN to unused VLAN 999 - security hardening
+CORE-SW(config-if)# switchport trunk native vlan 999
+CORE-SW(config-if)# no shutdown
+CORE-SW(config-if)# exit
+
+!============================================================
+! STEP 5: CONFIGURE TRUNK PORT TO SW-B (Gi0/3)
+! This trunk carries only VLAN 30 (Sales) and VLAN 99 (Mgmt)
+! Floor 2 only has Sales devices - HR and IT traffic stays on Floor 1
+!============================================================
+
+CORE-SW(config)# interface GigabitEthernet0/3
+CORE-SW(config-if)# description TRUNK-TO-SW-B
+CORE-SW(config-if)# switchport trunk encapsulation dot1q
+CORE-SW(config-if)# switchport mode trunk
+CORE-SW(config-if)# switchport trunk allowed vlan 30,99
+CORE-SW(config-if)# switchport trunk native vlan 999
+CORE-SW(config-if)# no shutdown
+CORE-SW(config-if)# exit
+
+!============================================================
+! STEP 6: CONFIGURE WAN UPLINK TO ISP (Gi0/1)
+! On a Layer 3 switch, routed ports use 'no switchport' to
+! turn them into a pure Layer 3 interface (like a router port)
+! This is called a "routed port" - it has an IP but no VLAN
+!============================================================
+
+CORE-SW(config)# interface GigabitEthernet0/1
+CORE-SW(config-if)# description WAN-TO-ISP
+!--- 'no switchport' converts this from a switchport to a routed port
+!--- After this command the port behaves exactly like a router interface
+CORE-SW(config-if)# no switchport
+CORE-SW(config-if)# ip address 203.0.113.2 255.255.255.252
+CORE-SW(config-if)# no shutdown
+CORE-SW(config-if)# exit
+
+!--- Default route to internet via ISP gateway
+CORE-SW(config)# ip route 0.0.0.0 0.0.0.0 203.0.113.1
+
+!============================================================
+! STEP 7: DISABLE AND ISOLATE UNUSED PORTS ON CORE-SW
+! Core switches typically have fewer access ports, but harden all unused
+!============================================================
+
+CORE-SW(config)# interface range GigabitEthernet0/4 - 24
+CORE-SW(config-if-range)# description UNUSED
+CORE-SW(config-if-range)# switchport trunk encapsulation dot1q
+CORE-SW(config-if-range)# switchport mode access
+CORE-SW(config-if-range)# switchport access vlan 999
+CORE-SW(config-if-range)# shutdown
+CORE-SW(config-if-range)# exit
+
+!--- Save
+CORE-SW(config)# end
+CORE-SW# copy running-config startup-config
+```
+SW-A - Complete Configuration
+```
+!============================================================
+! SW-A - BetaTech Floor 1 Access Switch (Cisco 2960, L2 only)
+! Role: Access layer for HR (VLAN 10) and IT (VLAN 20)
+!============================================================
+
+SW-A> enable
+SW-A# configure terminal
+
+SW-A(config)# hostname SW-A
+SW-A(config)# no ip domain-lookup
+
+!============================================================
+! STEP 1: CREATE VLANs
+! SW-A only needs the VLANs relevant to Floor 1
+! We still create VLAN 999 for unused port assignment
+!============================================================
+
+SW-A(config)# vlan 10
+SW-A(config-vlan)# name HR
+SW-A(config-vlan)# exit
+
+SW-A(config)# vlan 20
+SW-A(config-vlan)# name IT
+SW-A(config-vlan)# exit
+
+SW-A(config)# vlan 99
+SW-A(config-vlan)# name Management
+SW-A(config-vlan)# exit
+
+SW-A(config)# vlan 999
+SW-A(config-vlan)# name NATIVE_UNUSED
+SW-A(config-vlan)# exit
+
+!============================================================
+! STEP 2: CONFIGURE HR ACCESS PORTS (VLAN 10)
+! Fa0/1 → PC-HR1, Fa0/2 → PC-HR2
+!============================================================
+
+SW-A(config)# interface FastEthernet0/1
+SW-A(config-if)# description PC-HR1-VLAN10
+SW-A(config-if)# switchport mode access
+SW-A(config-if)# switchport access vlan 10
+!--- 'no shutdown' ensures the port is administratively up
+SW-A(config-if)# no shutdown
+SW-A(config-if)# exit
+
+SW-A(config)# interface FastEthernet0/2
+SW-A(config-if)# description PC-HR2-VLAN10
+SW-A(config-if)# switchport mode access
+SW-A(config-if)# switchport access vlan 10
+SW-A(config-if)# no shutdown
+SW-A(config-if)# exit
+
+!============================================================
+! STEP 3: CONFIGURE IT ACCESS PORTS (VLAN 20)
+! Fa0/5 → PC-IT1, Fa0/6 → PC-IT2
+! (Fa0/3 and Fa0/4 are intentionally skipped - will be unused)
+!============================================================
+
+SW-A(config)# interface FastEthernet0/5
+SW-A(config-if)# description PC-IT1-VLAN20
+SW-A(config-if)# switchport mode access
+SW-A(config-if)# switchport access vlan 20
+SW-A(config-if)# no shutdown
+SW-A(config-if)# exit
+
+SW-A(config)# interface FastEthernet0/6
+SW-A(config-if)# description PC-IT2-VLAN20
+SW-A(config-if)# switchport mode access
+SW-A(config-if)# switchport access vlan 20
+SW-A(config-if)# no shutdown
+SW-A(config-if)# exit
+
+!============================================================
+! STEP 4: DISABLE ALL UNUSED PORTS
+! Fa0/3, Fa0/4, Fa0/7 through Fa0/24 are unused on SW-A
+!============================================================
+
+SW-A(config)# interface range FastEthernet0/3 - 4
+SW-A(config-if-range)# description UNUSED
+SW-A(config-if-range)# switchport mode access
+SW-A(config-if-range)# switchport access vlan 999
+SW-A(config-if-range)# shutdown
+SW-A(config-if-range)# exit
+
+SW-A(config)# interface range FastEthernet0/7 - 24
+SW-A(config-if-range)# description UNUSED
+SW-A(config-if-range)# switchport mode access
+SW-A(config-if-range)# switchport access vlan 999
+SW-A(config-if-range)# shutdown
+SW-A(config-if-range)# exit
+
+!============================================================
+! STEP 5: CONFIGURE TRUNK UPLINK TO CORE-SW (Gi0/1)
+!============================================================
+
+SW-A(config)# interface GigabitEthernet0/1
+SW-A(config-if)# description TRUNK-TO-CORE-SW
+!--- On 2960, encapsulation is dot1q only - but we include it for exam clarity
+SW-A(config-if)# switchport trunk encapsulation dot1q
+SW-A(config-if)# switchport mode trunk
+!--- Allow VLANs 10, 20, and 99 - must match what CORE-SW allows on its Gi0/2
+SW-A(config-if)# switchport trunk allowed vlan 10,20,99
+SW-A(config-if)# switchport trunk native vlan 999
+SW-A(config-if)# no shutdown
+SW-A(config-if)# exit
+
+!============================================================
+! STEP 6: CONFIGURE MANAGEMENT SVI
+! This gives SW-A an IP address for remote management
+! VLAN 99 is used - kept completely separate from user VLANs
+!============================================================
+
+SW-A(config)# interface vlan 99
+SW-A(config-if)# description MANAGEMENT
+!--- Each switch gets a unique IP in the management subnet
+SW-A(config-if)# ip address 10.10.99.11 255.255.255.0
+SW-A(config-if)# no shutdown
+SW-A(config-if)# exit
+
+!--- Default gateway for the SWITCH ITSELF (not the PCs)
+!--- Points to CORE-SW's VLAN 99 SVI so the switch can be reached remotely
+!--- 'ip default-gateway' is used on L2 switches (not 'ip route')
+!--- because ip routing is NOT enabled on SW-A
+SW-A(config)# ip default-gateway 10.10.99.1
+
+SW-A(config)# end
+SW-A# copy running-config startup-config
+```
+SW-B - Complete Configuration
+```
+!============================================================
+! SW-B - BetaTech Floor 2 Access Switch (Cisco 2960, L2 only)
+! Role: Access layer for Sales department (VLAN 30 only)
+!============================================================
+
+SW-B> enable
+SW-B# configure terminal
+
+SW-B(config)# hostname SW-B
+SW-B(config)# no ip domain-lookup
+
+!============================================================
+! STEP 1: CREATE VLANs
+! SW-B only needs VLAN 30 (Sales), VLAN 99 (Mgmt), VLAN 999 (unused)
+! Do NOT create VLAN 10 or 20 here - they don't belong on Floor 2
+!============================================================
+
+SW-B(config)# vlan 30
+SW-B(config-vlan)# name Sales
+SW-B(config-vlan)# exit
+
+SW-B(config)# vlan 99
+SW-B(config-vlan)# name Management
+SW-B(config-vlan)# exit
+
+SW-B(config)# vlan 999
+SW-B(config-vlan)# name NATIVE_UNUSED
+SW-B(config-vlan)# exit
+
+!============================================================
+! STEP 2: CONFIGURE SALES ACCESS PORTS (VLAN 30)
+! Fa0/1 → PC-Sales1, Fa0/2 → PC-Sales2, Fa0/3 → PC-Sales3
+!============================================================
+
+SW-B(config)# interface FastEthernet0/1
+SW-B(config-if)# description PC-SALES1-VLAN30
+SW-B(config-if)# switchport mode access
+SW-B(config-if)# switchport access vlan 30
+SW-B(config-if)# no shutdown
+SW-B(config-if)# exit
+
+SW-B(config)# interface FastEthernet0/2
+SW-B(config-if)# description PC-SALES2-VLAN30
+SW-B(config-if)# switchport mode access
+SW-B(config-if)# switchport access vlan 30
+SW-B(config-if)# no shutdown
+SW-B(config-if)# exit
+
+SW-B(config)# interface FastEthernet0/3
+SW-B(config-if)# description PC-SALES3-VLAN30
+SW-B(config-if)# switchport mode access
+SW-B(config-if)# switchport access vlan 30
+SW-B(config-if)# no shutdown
+SW-B(config-if)# exit
+
+!============================================================
+! STEP 3: DISABLE ALL UNUSED PORTS
+!============================================================
+
+SW-B(config)# interface range FastEthernet0/4 - 24
+SW-B(config-if-range)# description UNUSED
+SW-B(config-if-range)# switchport mode access
+SW-B(config-if-range)# switchport access vlan 999
+SW-B(config-if-range)# shutdown
+SW-B(config-if-range)# exit
+
+!============================================================
+! STEP 4: CONFIGURE TRUNK UPLINK TO CORE-SW (Gi0/1)
+! Must match CORE-SW's allowed VLAN list on its Gi0/3
+!============================================================
+
+SW-B(config)# interface GigabitEthernet0/1
+SW-B(config-if)# description TRUNK-TO-CORE-SW
+SW-B(config-if)# switchport trunk encapsulation dot1q
+SW-B(config-if)# switchport mode trunk
+!--- Only VLAN 30 and management VLAN 99 are needed on this trunk
+SW-B(config-if)# switchport trunk allowed vlan 30,99
+SW-B(config-if)# switchport trunk native vlan 999
+SW-B(config-if)# no shutdown
+SW-B(config-if)# exit
+
+!============================================================
+! STEP 5: CONFIGURE MANAGEMENT SVI
+!============================================================
+
+SW-B(config)# interface vlan 99
+SW-B(config-if)# description MANAGEMENT
+!--- Different IP from SW-A (.12 vs .11)
+SW-B(config-if)# ip address 10.10.99.12 255.255.255.0
+SW-B(config-if)# no shutdown
+SW-B(config-if)# exit
+
+SW-B(config)# ip default-gateway 10.10.99.1
+
+SW-B(config)# end
+SW-B# copy running-config startup-config
+```
+PC IP Configuration
+```
+PC-HR1:
+  IP Address  : 10.10.10.10
+  Subnet Mask : 255.255.255.0
+  Gateway     : 10.10.10.1       ← CORE-SW SVI vlan 10
+
+PC-HR2:
+  IP Address  : 10.10.10.11
+  Subnet Mask : 255.255.255.0
+  Gateway     : 10.10.10.1
+
+PC-IT1:
+  IP Address  : 10.10.20.10
+  Subnet Mask : 255.255.255.0
+  Gateway     : 10.10.20.1       ← CORE-SW SVI vlan 20
+
+PC-IT2:
+  IP Address  : 10.10.20.11
+  Subnet Mask : 255.255.255.0
+  Gateway     : 10.10.20.1
+
+PC-Sales1:
+  IP Address  : 10.10.30.10
+  Subnet Mask : 255.255.255.0
+  Gateway     : 10.10.30.1       ← CORE-SW SVI vlan 30
+
+PC-Sales2:
+  IP Address  : 10.10.30.11
+  Subnet Mask : 255.255.255.0
+  Gateway     : 10.10.30.1
+
+PC-Sales3:
+  IP Address  : 10.10.30.12
+  Subnet Mask : 255.255.255.0
+  Gateway     : 10.10.30.1
+```
+### 6. Verification Commands
+On CORE-SW:
+```
+!--- Confirm ip routing is active and all SVIs have correct IPs
+CORE-SW# show ip interface brief
+
+!--- Expected output:
+! Interface         IP-Address    OK? Method  Status    Protocol
+! Vlan10            10.10.10.1    YES manual  up        up
+! Vlan20            10.10.20.1    YES manual  up        up
+! Vlan30            10.10.30.1    YES manual  up        up
+! Vlan99            10.10.99.1    YES manual  up        up
+! GigabitEthernet0/1 203.0.113.2  YES manual  up        up
+! GigabitEthernet0/2 unassigned   YES unset   up        up
+! GigabitEthernet0/3 unassigned   YES unset   up        up
+
+!--- Confirm routing table has all four connected subnets
+CORE-SW# show ip route
+
+!--- Expected output (excerpt):
+! Gateway of last resort is 203.0.113.1 to network 0.0.0.0
+! S*   0.0.0.0/0 [1/0] via 203.0.113.1
+! C    10.10.10.0/24 is directly connected, Vlan10
+! C    10.10.20.0/24 is directly connected, Vlan20
+! C    10.10.30.0/24 is directly connected, Vlan30
+! C    10.10.99.0/24 is directly connected, Vlan99
+
+!--- If ip routing is NOT enabled, show ip route shows nothing useful
+!--- and there are no 'C' entries for VLAN subnets
+
+!--- Confirm trunk status on both uplinks
+CORE-SW# show interfaces trunk
+
+!--- Expected output:
+! Port      Mode  Encapsulation  Status    Native vlan
+! Gi0/2     on    802.1q         trunking  999
+! Gi0/3     on    802.1q         trunking  999
+!
+! Port      Vlans allowed on trunk
+! Gi0/2     10,20,99
+! Gi0/3     30,99
+!
+! Port      Vlans allowed and active in management domain
+! Gi0/2     10,20,99
+! Gi0/3     30,99
+
+!--- Verify the VLAN database
+CORE-SW# show vlan brief
+
+!--- Inspect a specific SVI in detail
+CORE-SW# show interfaces vlan 10
+CORE-SW# show interfaces vlan 30
+```
+Ping Test Sequence:
+```
+!--- From PC-HR1 (10.10.10.10):
+
+Step 1 - Ping VLAN 10 SVI (own gateway):
+> ping 10.10.10.1         Expected: SUCCESS  (L2 within VLAN 10 to CORE-SW SVI)
+
+Step 2 - Ping same VLAN host:
+> ping 10.10.10.11        Expected: SUCCESS  (pure L2 switching, no routing)
+
+Step 3 - Ping IT gateway (VLAN 20 SVI):
+> ping 10.10.20.1         Expected: SUCCESS  (HR to IT - L3 routing on CORE-SW)
+
+Step 4 - Ping IT host:
+> ping 10.10.20.10        Expected: SUCCESS  (end-to-end VLAN 10 → VLAN 20)
+
+Step 5 - Ping Sales host (different floor, different switch):
+> ping 10.10.30.10        Expected: SUCCESS  (VLAN 10 → VLAN 30 via CORE-SW)
+
+Step 6 - Ping Sales3 (third Sales PC, different IP):
+> ping 10.10.30.12        Expected: SUCCESS
+
+!--- From PC-Sales1 (10.10.30.10):
+> ping 10.10.10.10        Expected: SUCCESS  (Sales Floor 2 → HR Floor 1)
+> ping 10.10.20.11        Expected: SUCCESS  (Sales → IT)
+> ping 10.10.99.1         Expected: SUCCESS  (Sales → Management SVI)
+> ping 10.10.99.11        Expected: SUCCESS  (Sales → SW-A management IP)
+> ping 10.10.99.12        Expected: SUCCESS  (Sales → SW-B management IP)
+
+!--- Management reachability test:
+> ping 10.10.99.11        (reach SW-A from any subnet)  Expected: SUCCESS
+> ping 10.10.99.12        (reach SW-B from any subnet)  Expected: SUCCESS
+```
+### 7. Troubleshooting Section
+#### Problem 1 - SVIs are configured with IPs but inter-VLAN routing still fails completely
+Symptom: show ip interface brief shows Vlan10, Vlan20, Vlan30 all up/up with correct IPs. But no PC in any VLAN can reach any PC in another VLAN. Same-VLAN pings work fine.\
+Root cause: ip routing was never entered on CORE-SW. This is the #1 mistake in SVI labs. Without it, CORE-SW is just a Layer 2 switch that happens to have IP addresses on its VLAN interfaces - it will not route between them.\
+Fix:
+```
+CORE-SW# show ip route
+! If output shows nothing or just "Default gateway is not set" - ip routing is off
+
+CORE-SW(config)# ip routing
+
+! Immediately re-test:
+CORE-SW# show ip route
+! Should now show C (connected) routes for all VLAN subnets
+```
+#### Problem 2 - SVI shows down/down despite correct configuration
+Symptom: show ip interface brief shows Vlan30   10.10.30.1   YES manual  down  down\
+Root cause: An SVI comes up only when at least one physical port in that VLAN is active (up/up). If every port assigned to VLAN 30 is either shutdown, disconnected, or not yet assigned to VLAN 30, the SVI stays down. This is different from a router interface which can be up independently.\
+Fix - diagnose which ports are in VLAN 30:
+```
+CORE-SW# show vlan id 30
+! Check which ports are listed - if none, no access ports are in this VLAN
+
+SW-B# show interfaces FastEthernet0/1 switchport
+! Check: Access Mode VLAN = 30
+! Check: Administrative Mode = static access
+
+! If ports are assigned but still down, check physical layer:
+SW-B# show interfaces FastEthernet0/1
+! Look for: FastEthernet0/1 is administratively down
+! If so:
+SW-B(config)# interface FastEthernet0/1
+SW-B(config-if)# no shutdown
+```
+#### Problem 3 - PC-Sales1 can reach CORE-SW but cannot reach HR or IT hosts
+Symptom: ping 10.10.30.1 succeeds (Sales SVI reachable). ping 10.10.10.10 fails (HR host unreachable).\
+Root cause A: VLAN 10 is not in the allowed VLAN list on the trunk between CORE-SW and SW-A, so CORE-SW can route the packet to VLAN 10 but cannot forward it to SW-A.\
+Root cause B: VLAN 10 does not exist in SW-A's VLAN database. CORE-SW forwards the frame out Gi0/2 tagged VLAN 10, but SW-A has no record of VLAN 10 and drops it.\
+Fix:
+```
+!--- Check trunk allowed VLANs:
+CORE-SW# show interfaces GigabitEthernet0/2 trunk
+! If VLAN 10 is missing from "Vlans allowed on trunk":
+CORE-SW(config)# interface GigabitEthernet0/2
+CORE-SW(config-if)# switchport trunk allowed vlan add 10
+
+!--- Check VLAN database on SW-A:
+SW-A# show vlan brief
+! If VLAN 10 is not listed:
+SW-A(config)# vlan 10
+SW-A(config-vlan)# name HR
+SW-A(config-vlan)# exit
+```
+#### Problem 4 - SW-A management SVI (VLAN 99) is up but the switch cannot be pinged from another subnet
+Symptom: From CORE-SW, ping 10.10.99.11 fails. SW-A's SVI is up with correct IP. VLAN 99 is allowed on the trunk.\
+Root cause: ip default-gateway was not configured on SW-A. SW-A has an IP (10.10.99.11) and can receive pings, but when it tries to reply, it has no idea where to send packets destined for 10.10.10.x or any other subnet outside its own. It drops the reply packet. The ping appears as request-timeout even though SW-A received it.\
+Fix:
+```
+SW-A# show ip route
+! On an L2 switch with ip routing disabled, this shows:
+! "Default gateway is not set"  ← this is the problem
+
+SW-A(config)# ip default-gateway 10.10.99.1
+! Verify:
+SW-A# show ip route
+! Should now show: "Default gateway is 10.10.99.1"
+```
+#### Problem 5 - Trunk shows correct allowed VLANs but "VLANs in spanning tree forwarding state" is missing some VLANs
+Symptom: show interfaces trunk on CORE-SW shows:
+```
+Vlans allowed on trunk: 10,20,99
+Vlans allowed and active in management domain: 10,20,99
+Vlans in spanning tree forwarding state and not pruned: 10,99
+```
+VLAN 20 is missing from the last line - traffic for VLAN 20 is blocked.
+Root cause: Spanning Tree Protocol (STP) has put the port in a blocking state for VLAN 20. This can happen if there's a loop, or if the port recently came up and STP hasn't converged yet (takes up to 50 seconds in classic STP). On access switches in a single-switch environment, you can enable PortFast on the trunk to speed convergence - though this is only appropriate on edge ports in production.\
+Fix:
+```
+!--- Wait 30-50 seconds and re-check (STP convergence delay)
+CORE-SW# show spanning-tree vlan 20
+
+!--- If the port is in BLK state, investigate why STP blocked it
+!--- In a lab with no loops, you can speed up STP with:
+SW-A(config)# spanning-tree mode rapid-pvst
+CORE-SW(config)# spanning-tree mode rapid-pvst
+!--- RSTP (Rapid PVST+) converges in ~1-2 seconds vs 30-50 for classic STP
+```
+### 8. Bonus - Exam Trick Questions
+#### Exam Trick Question 1:
+
+A student configures CORE-SW with SVIs for VLAN 10, 20, and 30. They run show ip interface brief and all three SVIs show up/up. They run show ip route and see all three connected routes. But every inter-VLAN ping still fails. The student has already verified PCs have correct IPs and gateways. What is the exact command that is missing and why does the routing table sometimes show connected routes even without it?
+Answer: The missing command is ip routing. On some IOS versions and in Packet Tracer, SVIs that are up/up will create connected route entries in the routing table even without ip routing enabled, this is a misleading quirk that tricks many students. The routing table entry exists for the interface's own subnet, but the actual L3 forwarding engine (the routing process that decides to forward packets between different VLANs) is disabled. The switch will ARP and respond on each SVI independently but will not forward packets between VLANs. The giveaway: show ip route without ip routing shows routes but there is no "Gateway of last resort" line and no static or dynamic routes — only the local interface entries. After ip routing, the full routing engine activates.
+
+#### Exam Trick Question 2:
+
+In this lab, VLAN 30 exists on SW-B but NOT on CORE-SW's VLAN database — however the trunk is configured and the SVI for VLAN 30 is configured on CORE-SW. Will VLAN 30 traffic pass between SW-B and CORE-SW? Will the SVI be up?
+Answer: This is a subtle and frequently tested scenario. The SVI (interface vlan 30) can be configured with an IP address regardless of whether VLAN 30 exists in the VLAN database. However, the SVI will be down/down if VLAN 30 is not in the VLAN database, because a VLAN that doesn't exist in the database has no ports and no logical existence on the switch. Additionally, while the trunk between CORE-SW and SW-B is 802.1Q which is standards-based, a Cisco switch will only pass VLAN tagged frames for VLANs that exist in its local VLAN database. If VLAN 30 doesn't exist in CORE-SW's VLAN database, it is pruned from the trunk automatically regardless of the allowed list. The fix is always: vlan 30 → name Sales on CORE-SW. The lesson: the allowed VLAN list on a trunk and the VLAN database are two independent requirements — both must be satisfied for a VLAN to pass traffic.
