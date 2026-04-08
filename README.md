@@ -492,6 +492,9 @@ On R1, a student runs show ip route and sees all three connected subnets (192.16
 Answer: The physical interface no shutdown. Even though the routing table shows connected routes for sub-interfaces (the routes are built when the sub-interfaces are configured, regardless of physical state on some IOS versions), if GigabitEthernet0/0 is administratively down, no frames actually pass through it. The routing table can be misleading here, it shows the routes as connected even when the interface is shutdown in some Packet Tracer versions. Always verify with show ip interface brief and look for up/up on the physical interface, not just the sub-interfaces.\
 
 ## LAB 2 - Inter-VLAN Routing via Layer 3 Switch (SVI)
+
+<img width="1207" height="684" alt="image" src="https://github.com/user-attachments/assets/dff09deb-7bd3-4102-8347-7eb8f67876ac" />
+
 ### 1. Scenario Description
 Company: BetaTech Solutions - a larger company with 80+ employees across two floors. The IT team has upgraded the network infrastructure with a Layer 3 core switch. The goal is to eliminate the external router as the single point of failure for inter-VLAN routing and move that function inside the switch fabric itself using SVIs. A dedicated management VLAN keeps switch management traffic completely separate from user traffic.\
 Note: This lab uses the `10.10.x.x` addressing scheme deliberately different from Lab 1, so you practice reading and not confusing subnet assignments.
