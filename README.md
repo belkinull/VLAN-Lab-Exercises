@@ -504,7 +504,7 @@ Note: This lab uses the `10.10.x.x` addressing scheme deliberately different fro
 | 999 | NATIVE | Unused native VLAN | - | - | Security |
 ### 2. Network Topology
 Devices:
-* CORE-SW: Cisco Catalyst 3560 - Layer 3 switch, routing engine enabled, SVIs for all VLANs, WAN uplink to ISP
+* CORE-SW: Cisco Catalyst 3650 - Layer 3 switch, routing engine enabled, SVIs for all VLANs, WAN uplink to ISP
 * SW-A: Cisco 2960 - Layer 2 access switch, Floor 1, carries VLAN 10 (HR) and VLAN 20 (IT)
 * SW-B: Cisco 2960 - Layer 2 access switch, Floor 2, carries VLAN 30 (Sales) only
 * 7 PCs across three departments
@@ -564,7 +564,7 @@ CORE-SW - Complete Configuration
 ```
 !============================================================
 ! CORE-SW - BetaTech Solutions Layer 3 Core Switch
-! Model: Cisco Catalyst 3560
+! Model: Cisco Catalyst 3650
 ! Role: Inter-VLAN routing via SVIs, trunk hub for access switches
 !============================================================
 
@@ -651,14 +651,14 @@ CORE-SW(config-if)# no shutdown
 CORE-SW(config-if)# exit
 
 !============================================================
-! STEP 4: CONFIGURE TRUNK PORT TO SW-A (Gi0/2)
+! STEP 4: CONFIGURE TRUNK PORT TO SW-A (Gi1/0/2)
 ! This trunk carries VLAN 10 (HR) and VLAN 20 (IT) and VLAN 99 (Mgmt)
 ! SW-B doesn't need VLAN 10 or 20 - so we don't allow them there
 !============================================================
 
-CORE-SW(config)# interface GigabitEthernet0/2
+CORE-SW(config)# interface GigabitEthernet1/0/2
 CORE-SW(config-if)# description TRUNK-TO-SW-A
-!--- On a 3560, this command IS required (unlike 2960 which is dot1q-only)
+!--- On a 3650, this command IS required (unlike 2960 which is dot1q-only)
 CORE-SW(config-if)# switchport trunk encapsulation dot1q
 !--- Force trunk - never rely on auto-negotiation for uplinks
 CORE-SW(config-if)# switchport mode trunk
@@ -670,12 +670,12 @@ CORE-SW(config-if)# no shutdown
 CORE-SW(config-if)# exit
 
 !============================================================
-! STEP 5: CONFIGURE TRUNK PORT TO SW-B (Gi0/3)
+! STEP 5: CONFIGURE TRUNK PORT TO SW-B (Gi1/0/3)
 ! This trunk carries only VLAN 30 (Sales) and VLAN 99 (Mgmt)
 ! Floor 2 only has Sales devices - HR and IT traffic stays on Floor 1
 !============================================================
 
-CORE-SW(config)# interface GigabitEthernet0/3
+CORE-SW(config)# interface GigabitEthernet1/0/3
 CORE-SW(config-if)# description TRUNK-TO-SW-B
 CORE-SW(config-if)# switchport trunk encapsulation dot1q
 CORE-SW(config-if)# switchport mode trunk
@@ -685,13 +685,13 @@ CORE-SW(config-if)# no shutdown
 CORE-SW(config-if)# exit
 
 !============================================================
-! STEP 6: CONFIGURE WAN UPLINK TO ISP (Gi0/1)
+! STEP 6: CONFIGURE WAN UPLINK TO ISP (Gi1/0/1)
 ! On a Layer 3 switch, routed ports use 'no switchport' to
 ! turn them into a pure Layer 3 interface (like a router port)
 ! This is called a "routed port" - it has an IP but no VLAN
 !============================================================
 
-CORE-SW(config)# interface GigabitEthernet0/1
+CORE-SW(config)# interface GigabitEthernet1/0/1
 CORE-SW(config-if)# description WAN-TO-ISP
 !--- 'no switchport' converts this from a switchport to a routed port
 !--- After this command the port behaves exactly like a router interface
@@ -708,7 +708,7 @@ CORE-SW(config)# ip route 0.0.0.0 0.0.0.0 203.0.113.1
 ! Core switches typically have fewer access ports, but harden all unused
 !============================================================
 
-CORE-SW(config)# interface range GigabitEthernet0/4 - 24
+CORE-SW(config)# interface range GigabitEthernet1/0/4 - 24
 CORE-SW(config-if-range)# description UNUSED
 CORE-SW(config-if-range)# switchport trunk encapsulation dot1q
 CORE-SW(config-if-range)# switchport mode access
