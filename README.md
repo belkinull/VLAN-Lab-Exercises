@@ -513,9 +513,9 @@ Interface connections:
 
 | From Device | Interface | To Device | Interface | Link Type |
 |------------|----------|----------|----------|-----------|
-| CORE-SW | Gi0/1 | ISP Router | - | WAN / Routed |
-| CORE-SW | Gi0/2 | SW-A | Gi0/1 | Trunk (VLANs 10,20,99) |
-| CORE-SW | Gi0/3 | SW-B | Gi0/1 | Trunk (VLANs 30,99) |
+| CORE-SW | Gi1/0/1 | ISP Router | - | WAN / Routed |
+| CORE-SW | Gi1/0/2 | SW-A | Gi0/1 | Trunk (VLANs 10,20,99) |
+| CORE-SW | Gi1/0/3 | SW-B | Gi0/1 | Trunk (VLANs 30,99) |
 | SW-A | Fa0/1 | PC-HR1 | NIC | Access VLAN 10 |
 | SW-A | Fa0/2 | PC-HR2 | NIC | Access VLAN 10 |
 | SW-A | Fa0/5 | PC-IT1 | NIC | Access VLAN 20 |
