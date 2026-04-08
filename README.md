@@ -1,6 +1,7 @@
 # Two Complete CCNA-Level VLAN Lab Exercises
 ## LAB 1 - Router-on-a-Stick (ROAS)
-<img width="623" height="620" alt="image" src="https://github.com/user-attachments/assets/bd466f7a-7387-41a4-b5f0-e9e9c8a31024" />
+
+<img width="852" height="692" alt="image" src="https://github.com/user-attachments/assets/b87a818e-c60a-4ee0-acb4-da09370b1cf3" />
 
 ### 1. Scenario Description
 Company: AlphaCorp, a growing mid-sized company with 45 employees spread across three departments operating from a single office floor. The IT team has decided to segment the network for security and performance. All traffic leaving the local network must be routed through a single router that also provides internet access. Because budget is limited, there is only one physical router and one switch, the router must handle all inter-VLAN routing.
