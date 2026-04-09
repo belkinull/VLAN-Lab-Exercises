@@ -493,7 +493,7 @@ Answer: The physical interface no shutdown. Even though the routing table shows 
 
 ## LAB 2 - Inter-VLAN Routing via Layer 3 Switch (SVI)
 
-<img width="1207" height="684" alt="image" src="https://github.com/user-attachments/assets/dff09deb-7bd3-4102-8347-7eb8f67876ac" />
+<img width="1209" height="660" alt="image" src="https://github.com/user-attachments/assets/913dd8d1-934b-4eee-bb2f-9c901f109bbb" />
 
 ### 1. Scenario Description
 Company: BetaTech Solutions - a larger company with 80+ employees across two floors. The IT team has upgraded the network infrastructure with a Layer 3 core switch. The goal is to eliminate the external router as the single point of failure for inter-VLAN routing and move that function inside the switch fabric itself using SVIs. A dedicated management VLAN keeps switch management traffic completely separate from user traffic.\
@@ -661,8 +661,6 @@ CORE-SW(config-if)# exit
 
 CORE-SW(config)# interface GigabitEthernet1/0/2
 CORE-SW(config-if)# description TRUNK-TO-SW-A
-!--- On a 3650, this command IS required (unlike 2960 which is dot1q-only)
-CORE-SW(config-if)# switchport trunk encapsulation dot1q
 !--- Force trunk - never rely on auto-negotiation for uplinks
 CORE-SW(config-if)# switchport mode trunk
 !--- Allow only the VLANs Floor 1 needs - deny everything else
@@ -680,7 +678,6 @@ CORE-SW(config-if)# exit
 
 CORE-SW(config)# interface GigabitEthernet1/0/3
 CORE-SW(config-if)# description TRUNK-TO-SW-B
-CORE-SW(config-if)# switchport trunk encapsulation dot1q
 CORE-SW(config-if)# switchport mode trunk
 CORE-SW(config-if)# switchport trunk allowed vlan 30,99
 CORE-SW(config-if)# switchport trunk native vlan 999
